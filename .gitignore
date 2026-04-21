@@ -1,0 +1,8 @@
+# Build artifacts
+*.exe
+
+# Local runtime/config state (machine-specific)
+.l-connect3-cli-state.json
+.l-connect3-cli-map.json
+.l-connect3-cli-lighting.json
+.l-connect3-cli-fans.json
