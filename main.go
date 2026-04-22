@@ -24,6 +24,17 @@ const (
 	fanFilePath   = ".l-connect3-cli-fans.json"
 )
 
+var (
+	hidProbeFunc                       = hidProbe
+	hidEnumerateDevicesFunc            = hidEnumerateDevices
+	hidFanSetFunc                      = hidFanSet
+	hidSetStaticColorAllFunc           = hidSetStaticColorAll
+	hidSetStaticColorChannelByIDFunc   = hidSetStaticColorChannelByID
+	hidReadRPMFunc                     = hidReadRPM
+	hidApplyEffectChannelByIDFunc      = hidApplyEffectChannelByID
+	hidApplyEffectPaletteChannelByIDFn = hidApplyEffectPaletteChannelByID
+)
+
 type fanTargetState struct {
 	Source    string `json:"Source"`
 	Mode      string `json:"Mode"`
@@ -80,7 +91,7 @@ func main() {
 }
 
 func runHIDProbe() error {
-	result, err := hidProbe(slInfinityVID, slInfinityPID)
+	result, err := hidProbeFunc(slInfinityVID, slInfinityPID)
 	if err != nil {
 		return err
 	}
@@ -90,7 +101,7 @@ func runHIDProbe() error {
 }
 
 func runHIDList() error {
-	entries, err := hidEnumerateDevices()
+	entries, err := hidEnumerateDevicesFunc()
 	if err != nil {
 		return err
 	}
@@ -121,7 +132,7 @@ func runHIDFan(portArg string, speedArg string) error {
 		return fmt.Errorf("speed must be 0..100")
 	}
 
-	if err := hidFanSet(slInfinityVID, slInfinityPID, port, speed); err != nil {
+	if err := hidFanSetFunc(slInfinityVID, slInfinityPID, port, speed); err != nil {
 		return err
 	}
 
@@ -153,7 +164,7 @@ func runHIDSet(hexColor string, brightnessArg string) error {
 		return err
 	}
 
-	if err := hidSetStaticColorAll(slInfinityVID, slInfinityPID, red, green, blue, brightnessPct); err != nil {
+	if err := hidSetStaticColorAllFunc(slInfinityVID, slInfinityPID, red, green, blue, brightnessPct); err != nil {
 		return err
 	}
 
@@ -194,7 +205,7 @@ func runHIDSetPort(portArg string, hexColor string, brightnessArg string) error 
 
 	channels := channelsForPort(channelMap, port)
 	for _, channel := range channels {
-		if err := hidSetStaticColorChannelByID(slInfinityVID, slInfinityPID, channel, red, green, blue, brightnessPct); err != nil {
+		if err := hidSetStaticColorChannelByIDFunc(slInfinityVID, slInfinityPID, channel, red, green, blue, brightnessPct); err != nil {
 			return err
 		}
 	}
@@ -229,7 +240,7 @@ func runHIDSetChannel(channelArg string, hexColor string, brightnessArg string) 
 		return err
 	}
 
-	if err := hidSetStaticColorChannelByID(slInfinityVID, slInfinityPID, channel, red, green, blue, brightnessPct); err != nil {
+	if err := hidSetStaticColorChannelByIDFunc(slInfinityVID, slInfinityPID, channel, red, green, blue, brightnessPct); err != nil {
 		return err
 	}
 
@@ -318,7 +329,7 @@ func runFanAll(speedOrPresetArg string) error {
 
 	failedPorts := make([]int, 0, 4)
 	for port := 1; port <= 4; port++ {
-		if err := hidFanSet(slInfinityVID, slInfinityPID, port, speed); err != nil {
+		if err := hidFanSetFunc(slInfinityVID, slInfinityPID, port, speed); err != nil {
 			failedPorts = append(failedPorts, port)
 		}
 	}
@@ -363,7 +374,7 @@ func runFanAll(speedOrPresetArg string) error {
 }
 
 func runHIDRPM() error {
-	rpmByPort, err := hidReadRPM(slInfinityVID, slInfinityPID)
+	rpmByPort, err := hidReadRPMFunc(slInfinityVID, slInfinityPID)
 	if err != nil {
 		return err
 	}
@@ -377,7 +388,7 @@ func runHIDRPM() error {
 }
 
 func runHIDStatus() error {
-	rpmByPort, err := hidReadRPM(slInfinityVID, slInfinityPID)
+	rpmByPort, err := hidReadRPMFunc(slInfinityVID, slInfinityPID)
 	if err != nil {
 		return err
 	}
@@ -436,7 +447,7 @@ func runHIDEffect(effectArg string, colorArg string, port int, speed int, bright
 	if port == 0 {
 		appliedAt := time.Now().Format(time.RFC3339)
 		for channel := 0; channel < 8; channel += 2 {
-			if err := hidApplyEffectChannelByID(slInfinityVID, slInfinityPID, channel, effectCode, speed, direction, brightnessPct, hasColor, red, green, blue); err != nil {
+			if err := hidApplyEffectChannelByIDFunc(slInfinityVID, slInfinityPID, channel, effectCode, speed, direction, brightnessPct, hasColor, red, green, blue); err != nil {
 				return fmt.Errorf("apply effect failed for channel %d: %w", channel, err)
 			}
 		}
@@ -469,7 +480,7 @@ func runHIDEffect(effectArg string, colorArg string, port int, speed int, bright
 
 	channels := channelsForPort(channelMap, port)
 	for _, channel := range channels {
-		if err := hidApplyEffectChannelByID(slInfinityVID, slInfinityPID, channel, effectCode, speed, direction, brightnessPct, hasColor, red, green, blue); err != nil {
+		if err := hidApplyEffectChannelByIDFunc(slInfinityVID, slInfinityPID, channel, effectCode, speed, direction, brightnessPct, hasColor, red, green, blue); err != nil {
 			return fmt.Errorf("apply effect failed for channel %d: %w", channel, err)
 		}
 	}
