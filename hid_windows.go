@@ -10,14 +10,20 @@ import (
 	"unsafe"
 )
 
+// hidBridge wraps the Windows hidapi.dll library, providing access to HID device functions
+// for communicating with Lian-Li L-Connect 3 devices. It lazily loads the DLL and caches
+// procedure pointers for each supported hidapi function (init, open, write, read, close, exit).
+// This allows communication with connected fans and RGB lighting controllers via HID reports.
 type hidBridge struct {
-	dll          *syscall.LazyDLL
-	initProc     *syscall.LazyProc
-	openProc     *syscall.LazyProc
-	writeProc    *syscall.LazyProc
-	getInputProc *syscall.LazyProc
-	closeProc    *syscall.LazyProc
-	exitProc     *syscall.LazyProc
+	dll           *syscall.LazyDLL  // Lazy-loaded hidapi.dll
+	initProc      *syscall.LazyProc // hid_init() - Initialize hidapi library
+	openProc      *syscall.LazyProc // hid_open(vendorID, productID, ...) - Open device by VID/PID
+	writeProc     *syscall.LazyProc // hid_write(handle, buf, len) - Send HID report to device
+	getInputProc  *syscall.LazyProc // hid_get_input_report(handle, buf, len) - Receive input report (optional)
+	closeProc     *syscall.LazyProc // hid_close(handle) - Close device handle
+	exitProc      *syscall.LazyProc // hid_exit() - Cleanup hidapi library
+	enumerateProc *syscall.LazyProc // hid_enumerate(vid, pid) - List connected HID devices (optional)
+	freeEnumProc  *syscall.LazyProc // hid_free_enumeration(devs) - Free device info list (optional)
 }
 
 // hidProbe verifies that hidapi can open the target VID/PID.
@@ -252,6 +258,114 @@ func hidReadRPM(vendorID uint16, productID uint16) ([4]uint16, error) {
 	return rpmByPort, nil
 }
 
+// hidDeviceEntry holds the parsed metadata for one HID device returned by hid_enumerate.
+type hidDeviceEntry struct {
+	VendorID           uint16
+	ProductID          uint16
+	UsagePage          uint16
+	Usage              uint16
+	InterfaceNumber    int
+	ManufacturerString string
+	ProductString      string
+	SerialNumber       string
+}
+
+// hid_device_info struct field offsets for Windows x64 (MSVC ABI).
+//
+// C layout:
+//
+//	offset  0: char*          path
+//	offset  8: uint16         vendor_id
+//	offset 10: uint16         product_id
+//	offset 12: [4 pad]
+//	offset 16: wchar_t*       serial_number
+//	offset 24: uint16         release_number
+//	offset 26: [6 pad]
+//	offset 32: wchar_t*       manufacturer_string
+//	offset 40: wchar_t*       product_string
+//	offset 48: uint16         usage_page
+//	offset 50: uint16         usage
+//	offset 52: int32          interface_number
+//	offset 56: hid_device_info* next
+const (
+	hidInfoOffVendorID           uintptr = 8
+	hidInfoOffProductID          uintptr = 10
+	hidInfoOffSerialNumber       uintptr = 16
+	hidInfoOffManufacturerString uintptr = 32
+	hidInfoOffProductString      uintptr = 40
+	hidInfoOffUsagePage          uintptr = 48
+	hidInfoOffUsage              uintptr = 50
+	hidInfoOffInterfaceNumber    uintptr = 52
+	hidInfoOffNext               uintptr = 56
+)
+
+func hidReadUint16At(base uintptr, offset uintptr) uint16 {
+	return *(*uint16)(unsafe.Pointer(base + offset))
+}
+
+func hidReadUintptrAt(base uintptr, offset uintptr) uintptr {
+	return *(*uintptr)(unsafe.Pointer(base + offset))
+}
+
+func hidReadInt32At(base uintptr, offset uintptr) int32 {
+	return *(*int32)(unsafe.Pointer(base + offset))
+}
+
+// hidReadWcharString reads a null-terminated UTF-16 string from a wchar_t pointer.
+func hidReadWcharString(ptr uintptr) string {
+	if ptr == 0 {
+		return ""
+	}
+	var buf []uint16
+	for i := uintptr(0); ; i += 2 {
+		c := *(*uint16)(unsafe.Pointer(ptr + i))
+		if c == 0 {
+			break
+		}
+		buf = append(buf, c)
+	}
+	return syscall.UTF16ToString(buf)
+}
+
+// hidEnumerateDevices calls hid_enumerate(0, 0) to list every connected HID device
+// and returns their metadata. Useful for discovering VID/PID values for unknown devices.
+func hidEnumerateDevices() ([]hidDeviceEntry, error) {
+	bridge, err := newHIDBridge()
+	if err != nil {
+		return nil, err
+	}
+	if bridge.enumerateProc == nil {
+		return nil, fmt.Errorf("hid_enumerate is not available in the current hidapi.dll")
+	}
+
+	// Passing 0,0 enumerates all HID devices regardless of VID/PID.
+	head, _, callErr := bridge.enumerateProc.Call(0, 0)
+	if head == 0 {
+		if callErr == syscall.Errno(0) {
+			return nil, nil // no devices found
+		}
+		return nil, fmt.Errorf("hid_enumerate failed: %w", callErr)
+	}
+	if bridge.freeEnumProc != nil {
+		defer bridge.freeEnumProc.Call(head)
+	}
+
+	var entries []hidDeviceEntry
+	for node := head; node != 0; node = hidReadUintptrAt(node, hidInfoOffNext) {
+		entries = append(entries, hidDeviceEntry{
+			VendorID:           hidReadUint16At(node, hidInfoOffVendorID),
+			ProductID:          hidReadUint16At(node, hidInfoOffProductID),
+			UsagePage:          hidReadUint16At(node, hidInfoOffUsagePage),
+			Usage:              hidReadUint16At(node, hidInfoOffUsage),
+			InterfaceNumber:    int(hidReadInt32At(node, hidInfoOffInterfaceNumber)),
+			ManufacturerString: hidReadWcharString(hidReadUintptrAt(node, hidInfoOffManufacturerString)),
+			ProductString:      hidReadWcharString(hidReadUintptrAt(node, hidInfoOffProductString)),
+			SerialNumber:       hidReadWcharString(hidReadUintptrAt(node, hidInfoOffSerialNumber)),
+		})
+	}
+	return entries, nil
+}
+
 func newHIDBridge() (*hidBridge, error) {
 	candidates := []string{
 		"hidapi.dll",
@@ -267,6 +381,8 @@ func newHIDBridge() (*hidBridge, error) {
 		getInputProc := dll.NewProc("hid_get_input_report")
 		closeProc := dll.NewProc("hid_close")
 		exitProc := dll.NewProc("hid_exit")
+		enumerateProc := dll.NewProc("hid_enumerate")
+		freeEnumProc := dll.NewProc("hid_free_enumeration")
 
 		if err := dll.Load(); err != nil {
 			lastErr = err
@@ -288,6 +404,13 @@ func newHIDBridge() (*hidBridge, error) {
 		if err := getInputProc.Find(); err != nil {
 			getInputProc = nil
 		}
+		// hid_enumerate and hid_free_enumeration are optional; present in standard hidapi builds.
+		if err := enumerateProc.Find(); err != nil {
+			enumerateProc = nil
+		}
+		if err := freeEnumProc.Find(); err != nil {
+			freeEnumProc = nil
+		}
 		if err := closeProc.Find(); err != nil {
 			lastErr = err
 			continue
@@ -298,13 +421,15 @@ func newHIDBridge() (*hidBridge, error) {
 		}
 
 		bridge := &hidBridge{
-			dll:          dll,
-			initProc:     initProc,
-			openProc:     openProc,
-			writeProc:    writeProc,
-			getInputProc: getInputProc,
-			closeProc:    closeProc,
-			exitProc:     exitProc,
+			dll:           dll,
+			initProc:      initProc,
+			openProc:      openProc,
+			writeProc:     writeProc,
+			getInputProc:  getInputProc,
+			closeProc:     closeProc,
+			exitProc:      exitProc,
+			enumerateProc: enumerateProc,
+			freeEnumProc:  freeEnumProc,
 		}
 
 		if _, _, callErr := bridge.initProc.Call(); callErr != syscall.Errno(0) {

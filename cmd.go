@@ -11,6 +11,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	rootCmd.AddCommand(
+		newHIDListCmd(),
 		newASCIIStatusCmd(),
 		newExamplesCmd(),
 		newHIDProbeCmd(),
@@ -132,6 +133,17 @@ func newHIDProbeCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runHIDProbe()
+		},
+	}
+}
+
+func newHIDListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "hid-list",
+		Short: "List all connected HID devices with VID, PID, and product info",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runHIDList()
 		},
 	}
 }

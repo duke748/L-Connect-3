@@ -35,3 +35,7 @@ func hidApplyEffectPaletteChannelByID(vendorID uint16, productID uint16, channel
 func hidReadRPM(vendorID uint16, productID uint16) ([4]uint16, error) {
 	return [4]uint16{}, fmt.Errorf("direct HID fallback is only implemented on Windows")
 }
+
+func hidEnumerateDevices() ([]hidDeviceEntry, error) {
+	return nil, fmt.Errorf("direct HID fallback is only implemented on Windows")
+}
