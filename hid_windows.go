@@ -258,18 +258,6 @@ func hidReadRPM(vendorID uint16, productID uint16) ([4]uint16, error) {
 	return rpmByPort, nil
 }
 
-// hidDeviceEntry holds the parsed metadata for one HID device returned by hid_enumerate.
-type hidDeviceEntry struct {
-	VendorID           uint16
-	ProductID          uint16
-	UsagePage          uint16
-	Usage              uint16
-	InterfaceNumber    int
-	ManufacturerString string
-	ProductString      string
-	SerialNumber       string
-}
-
 // hid_device_info struct field offsets for Windows x64 (MSVC ABI).
 //
 // C layout:
