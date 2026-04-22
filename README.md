@@ -2,6 +2,13 @@
 
 l-connect3-cli is a Windows-first command-line tool for controlling a Lian Li UNI HUB (SL Infinity VID/PID 0x0CF2:0xA102) directly over HID, without relying on the full L-Connect UI.
 
+Each SL Infinity fan has **2 independent RGB channels**: one for the **fan RGB** (main ring/body) and one for the **side lights**. This allows independent effect control or synchronized effects across both lighting zones per fan.
+
+![Fans](fans.gif)
+
+# Why?
+I have a stream deck and thought it would be nice to switch effects on the fly using macros. Next step will be to write an actual stream deck plugin. (If I get the time!)
+
 ## Features
 
 - Direct HID probe
@@ -36,6 +43,7 @@ go build -o l-connect3-cli.exe .
 
 ```powershell
 .\l-connect3-cli.exe hid-probe
+.\l-connect3-cli.exe hid-list
 .\l-connect3-cli.exe hid-rpm
 .\l-connect3-cli.exe hid-status
 .\l-connect3-cli.exe hid-fan 1 50
@@ -64,6 +72,31 @@ Tests direct HID open against VID/PID 0x0CF2:0xA102.
 .\l-connect3-cli.exe hid-probe
 ```
 
+### hid-list
+
+Enumerates all connected HID devices and prints their VID, PID, usage page, interface number, manufacturer, and product name. Useful for identifying the VID/PID of a different fan controller or hub.
+
+```powershell
+.\l-connect3-cli.exe hid-list
+```
+
+Example output:
+
+```
+VID     PID     Usage  Page   If#  Manufacturer                  Product
+------------------------------------------------------------------------------------------
+0x1B1C  0x1BF0  0x0006  0x0001  -1
+0x0CF2  0xA102  0x00A1  0xFF72  1    ENE                           LianLi-SL-infinity-v1.4
+0x1B1C  0x1B2D  0x0006  0x0001  0    Corsair                       Corsair Gaming K95 RGB PLATINUM Keyboard
+0x1B1C  0x1B2D  0x0002  0x0001  0    Corsair                       Corsair Gaming K95 RGB PLATINUM Keyboard
+0x0461  0x4E9D  0x0002  0x0001  0    DELL                          Alienware 610M
+0x1B1C  0x1BF0  0x0002  0x0001  -1
+0x0DB0  0x0B58  0x0001  0xFFC0  7    Generic                       USB Audio
+0x0FD9  0x006C  0x0001  0x000C  0    Elgato                        Stream Deck XL
+```
+
+The Lian Li UNI HUB will appear as `ENE / LianLi-SL-infinity-v1.4` with VID `0x0CF2` and PID `0xA102`. If you have a different Lian Li hub or fan controller, look for the `ENE` manufacturer entry and note its VID/PID.
+
 ### hid-fan <port> <speed>
 
 Sets one port to speed 0-100.
@@ -91,7 +124,9 @@ Shows live RPM plus last fan target state.
 
 ### hid-set <hex-color> [brightness]
 
-Sets static color on default primary channels (0,2,4,6).
+Sets static color on default primary channels (0,2,4,6)—the fan RGB channels for ports 1-4.
+
+Channel layout: channels 0,1 = port 1 (fan + side), channels 2,3 = port 2, channels 4,5 = port 3, channels 6,7 = port 4. By default, this command targets the even channels (fan RGB only).
 
 Color accepts either:
 
@@ -101,7 +136,7 @@ Color accepts either:
 
 ### hid-set-port <port> <hex-color> [brightness]
 
-Sets static color on one mapped visible port (writes both mapped channels).
+Sets static color on one mapped visible port (writes both the fan RGB and side light channels).
 
 ### hid-set-channel <channel> <hex-color> [brightness]
 
@@ -113,7 +148,7 @@ Shows current persisted mapping.
 
 ### hid-map-set <port> <channelA> <channelB>
 
-Updates mapping for one visible port.
+Updates mapping for one visible port. `channelA` is the fan RGB channel, `channelB` is the side light channel.
 
 ### hid-effect <effect>
 
@@ -143,7 +178,7 @@ Applies one linked effect with a palette of 1-4 colors.
 
 ### hid-effect split <primary-effect> <secondary-effect>
 
-Applies two effects to one fan group by assigning primary to first mapped channel and secondary to second mapped channel.
+Applies two independent effects to one fan group: primary effect to the fan RGB channel, secondary effect to the side light channel.
 
 ```powershell
 .\l-connect3-cli.exe hid-effect split door meteor --port 2 --primary-colors "#FF8800,#FFFFFF" --secondary-colors "#00D5FF,#FF4D7A" --speed 2 --brightness 100

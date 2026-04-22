@@ -89,6 +89,27 @@ func runHIDProbe() error {
 	return nil
 }
 
+func runHIDList() error {
+	entries, err := hidEnumerateDevices()
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		fmt.Println("no HID devices found")
+		return nil
+	}
+
+	fmt.Printf("%-6s  %-6s  %-5s  %-5s  %-3s  %-28s  %s\n",
+		"VID", "PID", "Usage", "Page", "If#", "Manufacturer", "Product")
+	fmt.Println(strings.Repeat("-", 90))
+	for _, e := range entries {
+		fmt.Printf("0x%04X  0x%04X  0x%04X  0x%04X  %-3d  %-28s  %s\n",
+			e.VendorID, e.ProductID, e.Usage, e.UsagePage, e.InterfaceNumber,
+			e.ManufacturerString, e.ProductString)
+	}
+	return nil
+}
+
 func runHIDFan(portArg string, speedArg string) error {
 	port, err := strconv.Atoi(portArg)
 	if err != nil || port < 1 || port > 4 {
