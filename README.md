@@ -277,6 +277,34 @@ The CLI persists local runtime state in the working directory:
 
 These are machine/controller-specific and should not be committed.
 
+## Release Automation
+
+This repository includes GitHub Actions workflows to automate version tags and release assets.
+
+- `.github/workflows/bump-tag.yml`: manually bump semantic version tags.
+- `.github/workflows/release.yml`: build and publish Windows executables when a tag is pushed.
+
+### Recommended Flow
+
+1. Push your latest changes to `dev`.
+2. In GitHub, open **Actions -> Bump Tag -> Run workflow**.
+3. Choose `release_type`:
+  - `patch`: `v0.6.0 -> v0.6.1`
+  - `minor`: `v0.6.0 -> v0.7.0`
+  - `major`: `v0.6.0 -> v1.0.0`
+4. Keep `target_ref` as `dev` (or choose another branch/commit).
+5. The workflow creates and pushes the new tag.
+6. Tag push triggers the release workflow automatically.
+7. GitHub Release is created with:
+  - `l-connect3-cli.exe`
+  - `l-connect3-cli-<tag>-windows-amd64.exe`
+
+### Notes
+
+- Version format is Semantic Versioning (`vMAJOR.MINOR.PATCH`).
+- Current baseline tag: `v0.6.0`.
+- You can still create and push tags manually if preferred.
+
 ## Troubleshooting
 
 If hid-probe fails:

@@ -1,0 +1,85 @@
+name: Bump Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Which version part to increment
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+      target_ref:
+        description: Branch or commit to tag
+        required: true
+        default: dev
+
+permissions:
+  contents: write
+
+jobs:
+  bump-and-push-tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout target ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref }}
+          fetch-depth: 0
+
+      - name: Calculate next tag
+        id: next
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --tags --force
+
+          latest_tag=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+          if [ -z "$latest_tag" ]; then
+            latest_tag="v0.0.0"
+          fi
+
+          version=${latest_tag#v}
+          IFS='.' read -r major minor patch <<< "$version"
+
+          case "${{ inputs.release_type }}" in
+            patch)
+              patch=$((patch + 1))
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+          esac
+
+          next_tag="v${major}.${minor}.${patch}"
+
+          echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+          echo "next_tag=$next_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "${{ steps.next.outputs.next_tag }}" -m "Release ${{ steps.next.outputs.next_tag }}"
+          git push origin "${{ steps.next.outputs.next_tag }}"
+
+      - name: Summary
+        run: |
+          echo "Latest tag: ${{ steps.next.outputs.latest_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "New tag: ${{ steps.next.outputs.next_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Target ref: ${{ inputs.target_ref }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Release workflow should now run for the new tag." >> "$GITHUB_STEP_SUMMARY"
