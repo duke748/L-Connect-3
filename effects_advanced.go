@@ -46,7 +46,7 @@ func runHIDEffectLinked(effectArg string, colorsArg string, port int, speed int,
 	for _, p := range targetPorts {
 		ch := channelsForPort(channelMap, p)
 		for _, channel := range ch {
-			if err := hidApplyEffectPaletteChannelByID(slInfinityVID, slInfinityPID, channel, effectCode, speed, direction, brightnessPct, colors); err != nil {
+			if err := hidApplyEffectPaletteChannelByIDFn(slInfinityVID, slInfinityPID, channel, effectCode, speed, direction, brightnessPct, colors); err != nil {
 				return fmt.Errorf("apply linked effect failed for port %d channel %d: %w", p, channel, err)
 			}
 		}
@@ -116,10 +116,10 @@ func runHIDEffectSplit(primaryArg string, secondaryArg string, primaryColorsArg 
 	for _, p := range targetPorts {
 		ch := channelsForPort(channelMap, p)
 
-		if err := hidApplyEffectPaletteChannelByID(slInfinityVID, slInfinityPID, ch[0], primaryCode, speed, direction, brightnessPct, primaryColors); err != nil {
+		if err := hidApplyEffectPaletteChannelByIDFn(slInfinityVID, slInfinityPID, ch[0], primaryCode, speed, direction, brightnessPct, primaryColors); err != nil {
 			return fmt.Errorf("apply split primary failed for port %d channel %d: %w", p, ch[0], err)
 		}
-		if err := hidApplyEffectPaletteChannelByID(slInfinityVID, slInfinityPID, ch[1], secondaryCode, speed, direction, brightnessPct, secondaryColors); err != nil {
+		if err := hidApplyEffectPaletteChannelByIDFn(slInfinityVID, slInfinityPID, ch[1], secondaryCode, speed, direction, brightnessPct, secondaryColors); err != nil {
 			return fmt.Errorf("apply split secondary failed for port %d channel %d: %w", p, ch[1], err)
 		}
 
